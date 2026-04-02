@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="description" content="Interactive Automata Theory Toolchain — Regex to NFA to DFA with visual diagrams"/>
+  <title>Automata Toolchain — Regex &rarr; NFA &rarr; DFA</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+
+  <!-- Cytoscape + Dagre layout -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+</head>
+<body>
+
+<!-- ── NAVIGATION ──────────────────────────────────────────────── -->
+<nav>
+  <div class="logo">Automata<span>.toolchain</span></div>
+  <div class="nav-badges">
+    <span class="nbadge nb-a">A &middot; Thompson NFA</span>
+    <span class="nbadge nb-b">B &middot; Subset DFA</span>
+    <span class="nbadge nb-c">C &middot; Hopcroft Min</span>
+    <span class="nbadge nb-d">D &middot; Test Strings</span>
+  </div>
+</nav>
+
+<!-- ── HERO ────────────────────────────────────────────────────── -->
+<div class="hero">
+  <h1>Automata Theory Toolchain</h1>
+  <p>Regex &rarr; NFA &rarr; DFA &rarr; Minimized DFA &rarr; String Testing &mdash; with interactive diagrams</p>
+</div>
+
+<!-- ── MAIN ────────────────────────────────────────────────────── -->
+<div class="container">
+
+  <!-- INPUT FORM -->
+  <div class="form-card">
+    <div class="form-grid">
+      <div>
+        <label for="regex">Regular Expression</label>
+        <input id="regex" type="text" placeholder="(a|b)*abb" value="(a|b)*abb" autocomplete="off"/>
+        <p class="hint">
+          <code>|</code> union &nbsp;
+          <code>*</code> star &nbsp;
+          <code>+</code> plus &nbsp;
+          <code>?</code> optional &nbsp;
+          <code>()</code> group
+        </p>
+      </div>
+      <div>
+        <label for="inputs">
+          Test Strings
+          <small style="text-transform:none;font-weight:400">(one per line)</small>
+        </label>
+        <textarea id="inputs" rows="5" placeholder="abb&#10;ab&#10;babb">abb
+aabb
+babb
+ab
+bb
+ababb
+</textarea>
+      </div>
+    </div>
+    <button class="run-btn" id="runBtn" onclick="runPipeline()">
+      <span class="btn-icon">&#9654;</span>
+      <span class="spin"></span>
+      Run Pipeline
+    </button>
+  </div>
+
+  <!-- ERROR BANNER -->
+  <div class="err-box" id="errBox"></div>
+
+  <!-- RESULTS (hidden until first run) -->
+  <div id="resultsArea" class="hidden">
+
+    <!-- ── A: NFA ──────────────────────────────────────────────── -->
+    <div class="sec-hdr">
+      <div class="sec-dot" style="background:var(--accent)"></div>
+      <h2>A &mdash; NFA <small>&nbsp;Thompson's Construction</small></h2>
+    </div>
+    <div class="auto-card" id="panel-nfa">
+      <div class="auto-card-top">
+        <h3 id="nfa-title">NFA</h3>
+        <span class="auto-stats" id="nfa-stats"></span>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('nfa','table')">&#9776; Table</button>
+        <button class="tab-btn"        onclick="switchTab('nfa','diagram')">&#11044; Diagram</button>
+      </div>
+      <!-- Table pane -->
+      <div id="nfa-table" class="tab-pane active">
+        <div class="pills" id="nfa-pills"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>From</th><th>Symbol</th><th>To</th></tr></thead>
+            <tbody id="nfa-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Diagram pane -->
+      <div id="nfa-diagram" class="tab-pane">
+        <div class="diagram-wrap">
+          <div id="cy-nfa" class="cy-box"></div>
+          <div class="cy-controls">
+            <button class="cy-btn" onclick="fitDiagram('nfa')">Fit</button>
+            <button class="cy-btn" onclick="resetDiagram('nfa')">Reset</button>
+          </div>
+          <div class="cy-legend">
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--cyan);background:rgba(94,246,255,.12)"></div>
+              Start state
+            </div>
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--green);background:rgba(61,255,160,.12)"></div>
+              Accept state
+            </div>
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--muted);background:none"></div>
+              Normal state
+            </div>
+            <div class="cy-legend-item">
+              <span style="font-size:.68rem;font-style:italic;color:var(--accent)">&epsilon;</span>
+              &nbsp;Epsilon edge (dashed)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── B: DFA ──────────────────────────────────────────────── -->
+    <div class="sec-hdr" style="margin-top:1.8rem">
+      <div class="sec-dot" style="background:var(--cyan)"></div>
+      <h2>B &mdash; DFA <small>&nbsp;Subset Construction</small></h2>
+    </div>
+    <div class="auto-card" id="panel-dfa">
+      <div class="auto-card-top">
+        <h3 id="dfa-title">DFA</h3>
+        <span class="auto-stats" id="dfa-stats"></span>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('dfa','table')">&#9776; Table</button>
+        <button class="tab-btn"        onclick="switchTab('dfa','diagram')">&#11044; Diagram</button>
+      </div>
+      <div id="dfa-table" class="tab-pane active">
+        <div class="pills" id="dfa-pills"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>From</th><th>Symbol</th><th>To</th></tr></thead>
+            <tbody id="dfa-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="dfa-diagram" class="tab-pane">
+        <div class="diagram-wrap">
+          <div id="cy-dfa" class="cy-box"></div>
+          <div class="cy-controls">
+            <button class="cy-btn" onclick="fitDiagram('dfa')">Fit</button>
+            <button class="cy-btn" onclick="resetDiagram('dfa')">Reset</button>
+          </div>
+          <div class="cy-legend">
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--cyan);background:rgba(94,246,255,.12)"></div>
+              Start state
+            </div>
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--green);background:rgba(61,255,160,.12)"></div>
+              Accept state
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── C: Minimized DFA ────────────────────────────────────── -->
+    <div class="sec-hdr" style="margin-top:1.8rem">
+      <div class="sec-dot" style="background:var(--green)"></div>
+      <h2>C &mdash; Minimized DFA <small>&nbsp;Partition Refinement</small></h2>
+    </div>
+    <div class="auto-card" id="panel-minDfa">
+      <div class="auto-card-top">
+        <h3 id="minDfa-title">Min DFA</h3>
+        <span class="auto-stats" id="minDfa-stats"></span>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('minDfa','table')">&#9776; Table</button>
+        <button class="tab-btn"        onclick="switchTab('minDfa','diagram')">&#11044; Diagram</button>
+      </div>
+      <div id="minDfa-table" class="tab-pane active">
+        <div class="pills" id="minDfa-pills"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>From</th><th>Symbol</th><th>To</th></tr></thead>
+            <tbody id="minDfa-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="minDfa-diagram" class="tab-pane">
+        <div class="diagram-wrap">
+          <div id="cy-minDfa" class="cy-box"></div>
+          <div class="cy-controls">
+            <button class="cy-btn" onclick="fitDiagram('minDfa')">Fit</button>
+            <button class="cy-btn" onclick="resetDiagram('minDfa')">Reset</button>
+          </div>
+          <div class="cy-legend">
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--cyan);background:rgba(94,246,255,.12)"></div>
+              Start
+            </div>
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--green);background:rgba(61,255,160,.12)"></div>
+              Accept
+            </div>
+            <div class="cy-legend-item">
+              <div class="cy-legend-dot" style="border-color:var(--gold);background:rgba(255,204,94,.15)"></div>
+              Path highlight
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── D: String Testing ───────────────────────────────────── -->
+    <div class="sec-hdr" style="margin-top:1.8rem">
+      <div class="sec-dot" style="background:var(--gold)"></div>
+      <h2>D &mdash; String Testing
+        <small>&nbsp;click a card to highlight path on Min DFA diagram</small>
+      </h2>
+    </div>
+    <div class="results-grid" id="testResults"></div>
+
+  </div><!-- /resultsArea -->
+
+</div><!-- /container -->
+
+<footer>
+  Automata Toolchain &nbsp;&middot;&nbsp;
+  Thompson &middot; Subset &middot; Hopcroft &nbsp;&middot;&nbsp;
+  Flask + Cytoscape.js
+</footer>
+
+<!-- App JS (after DOM) -->
+<script src="{{ url_for('static', filename='main.js') }}"></script>
+
+</body>
+</html>
